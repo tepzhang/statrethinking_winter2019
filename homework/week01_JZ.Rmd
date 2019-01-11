@@ -1,0 +1,88 @@
+---
+title: "Homework_week1_JZ"
+author: "Jinxiao Zhang"
+date: "January 10, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. Suppose the globe tossing data had turned out to be 8 water in 15 tosses.
+Construct the posterior distribution, using grid approximation. Use the
+same flat prior as before.
+```{r cars}
+p_grid <- seq(from = 0, to = 1, length.out = 1000)
+prior_p <- rep(1, 1000)
+prob_data <- dbinom(8, 15, p_grid)
+posterior <- prior_p*prob_data/sum(prior_p*prob_data)
+
+plot(p_grid, posterior)
+```
+2. Start over in 1, but now use a prior that is zero below p = 0.5 and a constant
+above p = 0.5. This corresponds to prior information that a majority
+of the Earth's surface is water. What difference does the better prior make?
+If it helps, compare posterior distributions (using both priors) to the true
+value p = 0.7.
+
+```{r}
+prior_p2 <- c(rep(0, 500),rep(1,500))
+prob_data2 <- dbinom(8, 15, p_grid)
+posterior2 <- prior_p2*prob_data2/sum(prior_p2*prob_data2)
+
+plot(p_grid, posterior2)
+points(p_grid, posterior, col = "grey")
+
+# for (i in 1:1000){
+#  if (posterior2[i] == max(posterior2)) {
+#    print(i)
+#    break
+#  }
+# }
+
+```
+
+3. This problem is more open-ended than the others. Feel free to collaborate
+on the solution. Suppose you want to estimate the Earth's proportion of
+water very precisely. Specifically, you want the 99% percentile interval of the
+posterior distribution of p to be only 0.05 wide. This means the distance between
+the upper and lower bound of the interval should be 0.05. How many
+times will you have to toss the globe to do this? I won't require a precise
+answer. I'm honestly more interested in your approach.
+
+```{r}
+for (n in seq(1000, 10000, by = 10)){
+  prob_data3 <- dbinom(n*0.7, n, p_grid)
+  posterior3 <- prior_p*prob_data3/sum(prior_p*prob_data3)
+  
+  #plot(p_grid, posterior3)
+  
+  temp1 = 0
+  for (i in 1:(n/2)){
+    temp1 = temp1 + posterior3[i]
+    if (temp1 >= .005){
+      print(c(n,i))
+      break
+    }
+  }
+  
+  temp2 = 0
+  for (j in 1:(n/2)){
+    temp2 = temp2 + posterior3[1001-j]
+    if (temp2 >= .005){
+      print(c(n,1001-j))
+      break
+    }
+  }
+  
+  if((1001-j-i) <= 50){
+    message(paste("found it: ",n))
+    answer = n
+    break
+  }
+  
+}
+
+```
+
