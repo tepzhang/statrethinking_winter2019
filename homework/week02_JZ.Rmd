@@ -1,0 +1,106 @@
+---
+title: "week02_JZ"
+author: "Jinxiao Zhang"
+date: "January 15, 2019"
+output: html_document
+---
+
+```{r lecture}
+library(rethinking)
+data("Howell1")
+d <- Howell1
+precis(d)
+
+
+sample_mu <- rnorm( 1e4 , 178 , 20 ) 
+sample_sigma <- runif( 1e4 , 0 , 50 )
+prior_h <- rnorm( 1e4 , sample_mu , sample_sigma )
+dens( prior_h )
+
+
+#### grid approximation #####
+d2 <- d[ d$age >= 18 , ]
+mu.list <- seq( from=153.5, to=155 , length.out=150 ) 
+sigma.list <- seq( from=7 , to=8.5 , length.out=150 )
+post <- expand.grid( mu=mu.list , sigma=sigma.list )
+#calculate the log-likelihood
+post$LL <- sapply( 1:nrow(post) , function(i) sum( dnorm(
+  d2$height,
+  mean=post$mu[i] ,
+  sd=post$sigma[i] ,
+  log=TRUE) ) )
+#add up the log-likelihood
+post$prod <- post$LL +
+  dnorm( post$mu , 178 , 20 , TRUE ) +
+  dunif( post$sigma , 0 , 50 , TRUE ) # the priors
+post$prob <- exp(( post$prod - max(post$prod)))
+
+# visualize
+#contour_xyz( post$mu , post$sigma , post$prob)
+image_xyz( post$mu , post$sigma , post$prob )
+
+
+sample.rows <- sample( 1:nrow(post) , size=1e4 , replace=TRUE ,
+prob=post$prob )
+sample.mu <- post$mu[ sample.rows ]
+sample.sigma <- post$sigma[ sample.rows ]
+
+plot( sample.mu , sample.sigma , cex=0.5 , pch=16 , col=col.alpha(rangi2,0.1) )
+dens( sample.mu )
+dens( sample.sigma )
+
+
+########### Quardratic approximation ###########
+flist <- alist(
+height ~ dnorm( mu , sigma ) ,
+mu ~ dnorm( 178 , 20 ) ,
+sigma ~ dunif( 0 , 50 )
+)
+m4.1 <- quap( flist , data=d2)
+
+post <- extract.samples( m4.1 , n=1e4 )
+head(post)
+dens(post$mu)
+
+############# linear regression ############
+# define the average weight, x-bar
+xbar <- mean(d2$weight)
+# fit model
+m4.3 <- quap(
+alist(
+height ~ dnorm( mu , sigma ) ,
+mu <- a + b*( weight - xbar ) ,
+# the priors of the parameters
+a ~ dnorm( 178 , 20 ) ,
+b ~ dlnorm( 0 , 1 ) ,
+sigma ~ dunif( 0 , 50 )
+) ,
+data=d2 )
+
+precis(m4.3)
+
+plot( height ~ weight , data=d2 , col=rangi2 )
+post <- extract.samples( m4.3 )
+a_map <- mean(post$a)
+b_map <- mean(post$b)
+curve( a_map + b_map*(x - xbar) , add=TRUE )
+
+ggplot(post, aes(a, b) ) +
+  geom_bin2d(bins = 70) +
+  theme_bw()
+```
+
+```{r}
+
+#### my testing on generating samples ########
+set.seed(100)
+tmp <- rnorm(10000, 10:19, 1)
+dens(tmp)
+
+tmp1 <- c()
+for (n in 10:19){
+  tmp1 <- c(tmp1, rnorm(1000, n, 1))
+}
+dens(tmp1)
+```
+

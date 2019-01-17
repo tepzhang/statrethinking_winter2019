@@ -9,10 +9,24 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r lecture}
+p_grid <- seq(from = 0, to = 1, length.out = 1000)
+prior_p <- rep(1, 1000)
+prob_data <- dbinom(6, 9, p_grid)
+posterior <- prior_p*prob_data/sum(prior_p*prob_data)
+
+samples <- sample(p_grid, prob = posterior, size = 1e4, replace = T)
+
+plot(density(samples))
+
+
+```
+
+
 1. Suppose the globe tossing data had turned out to be 8 water in 15 tosses.
 Construct the posterior distribution, using grid approximation. Use the
 same flat prior as before.
-```{r cars}
+```{r problem1}
 p_grid <- seq(from = 0, to = 1, length.out = 1000)
 prior_p <- rep(1, 1000)
 prob_data <- dbinom(8, 15, p_grid)
