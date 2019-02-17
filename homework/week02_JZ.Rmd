@@ -5,8 +5,12 @@ date: "January 15, 2019"
 output: html_document
 ---
 
-```{r lecture}
+```{r lead libraries}
+library(tidyverse)
 library(rethinking)
+```
+
+```{r lecture}
 data("Howell1")
 d <- Howell1
 precis(d)
@@ -103,4 +107,126 @@ for (n in 10:19){
 }
 dens(tmp1)
 ```
+```{r Q1}
+data(Howell1)
+d <- Howell1
+d2 <- d[d$age >= 18,]
+
+weight_mean = mean(d2$weight)
+
+# fit the model
+m1 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <-  alpha +beta*(weight - weight_mean),
+    alpha ~ dnorm(178, 20),
+    beta ~ dlnorm(0, 1),
+    sigma ~ dunif(0, 50)
+  ),
+  data = d2
+)
+
+precis(m1)
+
+post <- extract.samples(m1)
+
+# predict mu
+mu_45 <- post$alpha + post$beta*(45 - weight_mean)
+mu_45 <- link(m1, data = data.frame(weight = c(45, 40, 60, 31, 53)))
+apply(mu_45, 2, mean)
+apply(mu_45, 2, PI, prob = .89)
+## wrong ######
+## link doesn't work here, because it only predicts the mu, not the height...
+## same mean, but different variance 
+
+# from solutions
+dat <- data.frame( weight=c(45,40,65,31,53) )
+h_sim <- sim( m1 , data=dat )
+Eh <- apply(h_sim,2,mean)
+h_ci <- apply(h_sim,2,PI,prob=0.89)
+```
+
+```{r  Q2}
+d <- d %>% 
+  mutate(weight_scd = scale(weight),
+         log_weight_scd = scale(log(weight)))
+
+
+# fit a quadratic model
+m2 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <-  alpha + beta1*log_weight_scd + beta2*I(log_weight_scd^2),
+    alpha ~ dnorm(178, 20),
+    beta1 ~ dlnorm(0, 1),
+    beta2 ~ dnorm(0, 1),
+    sigma ~ dunif(0, 50)
+  ),
+  data = d
+)
+
+precis(m2)
+post2 <- extract.samples(m2)
+
+m2_sim <- sim(m2, data = data.frame(log_weight_scd = d$log_weight_scd))
+m2_predict <- data.frame(height = apply(m2_sim,2,mean), weight = d$weight)
+
+
+mu_ci <- apply(m2_sim,2,PI,0.99)
+
+# plot the model vs. the data
+ggplot(d, aes(weight, height))+
+  geom_point(shape = 21,
+             color = "blue")+
+  geom_line(data = m2_predict, 
+             aes(weight, 
+                 height),
+            size = 1)
+
+
+```
+```{r Q3}
+# d <- Howell1
+  
+# d$weight_s <- ( d$weight - mean(d$weight) )/sd(d$weight)
+# d$weight_s2 <- d$weight_s^2
+# m4.5 <- quap(
+#   alist(
+#     height ~ dnorm( mu , sigma ) ,
+#     mu <- a + b1*weight_s + b2*weight_s2 ,
+#     a ~ dnorm( 178 , 20 ) ,
+#     b1 ~ dlnorm( 0 , 1 ) ,
+#     b2 ~ dnorm( 0 , 1 ) ,
+#     sigma ~ dunif( 0 , 50 )
+#   ) ,
+#   data=d )
+
+# plot the prior
+set.seed(1)
+N <- 100 # 100 lines
+a <- rnorm( N , 178 , 20 )
+b1 <- rlnorm( N , 0 , 1)
+b2 <- rlnorm(N, -5, 1)
+#b2 <- rexp(N, 10)
+
+plot( NULL , xlim=range(d2$weight) , ylim=c(-100,400) ,
+xlab="weight" , ylab="height" )
+abline( h=0 , lty=2 )
+abline( h=272 , lty=1 , lwd=0.5 )
+xbar <- mean(d$weight)
+for ( i in 1:N ) curve( a[i] + b1[i]*(x - xbar) + b2[i]*(x - xbar)^2,
+from=min(d2$weight) , to=max(d2$weight) , add=TRUE , 
+col=col.alpha("black",0.3) )
+```
+```{r plot log-normal distribution}
+x = seq(0, 0.05, by = .0001)
+y = dlnorm(x, -5, 1)
+plot(x, y)
+
+x = rlnorm(10000, -5, 1)
+dens(x)
+dens(log(x))
+```
+
+
 
