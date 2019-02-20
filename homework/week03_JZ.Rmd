@@ -1,0 +1,134 @@
+---
+title: "week03_JZ"
+author: "Jinxiao Zhang"
+date: "February 17, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rethinking)
+library(tidyverse)
+```
+
+1. Use a model to infer the total causal influence of area on weight. Would
+increasing the area available to each fox make it heavier (healthier)? You
+might want to standardize the variables. Regardless, use prior predictive
+simulation to show that your model’s prior predictions stay within the possible
+outcome range.
+```{r Q1}
+df.foxes <- foxes
+# standardize variables
+df.foxes <- df.foxes %>% 
+  mutate(area_std = scale(area, scale = T),
+         avgfood_std = scale(avgfood, scale = T),
+         groupsize_std = scale(groupsize, scale = T))
+
+hist(df.foxes$area) 
+hist(df.foxes$weight) # range of weight: 1-8
+
+
+m1 <- quap(
+  alist(
+    weight ~ dnorm(mu, sigma),
+    mu <-  a + b*area_std,
+    a ~ dnorm(4.5, 1),
+    b ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ), data = df.foxes
+)
+
+prior1 <- extract.prior(m1)
+precis(prior1)
+
+# plot the prior
+area_seq <- seq( from=min(df.foxes$area_std) , to=max(df.foxes$area_std) ,
+              length.out=50)
+mu <- link( m1 , post=prior1 ,
+            data=list( area_std = area_seq))
+
+plot( NULL , xlim=range(area_seq) , ylim=c(0,10) ,
+      xlab="area (std)" , ylab="weight" )
+abline( h=1 , lty=2 , col = "red")
+abline( h=8 , lty=2 , col = "red")
+for ( i in 1:50 ) lines(area_seq , mu$mu[i,] , col=col.alpha("black",0.5) )
+
+# for ( i in 1:N ) curve( a[i] + b1[i]*(x - xbar) + b2[i]*(x - xbar)^2,
+#                         from=min(d2$weight) , to=max(d2$weight) , add=TRUE , 
+#                         col=col.alpha("black",0.3) )
+
+
+# evaluate the posterior
+precis(m1)
+
+post_sim1 <- sim(m1, data = df.foxes)
+m1_predict <- data.frame(weight = apply(post_sim1,2,mean), area_std = df.foxes$area_std)
+
+# plot the observed. vs. predicted
+ggplot(df.foxes, aes(area_std, weight))+
+  geom_point()+
+  geom_point(data = m1_predict, color = "blue")
+```
+
+
+
+Answer: No, increasing the area available to each fox wouldn't make it heavier.
+
+
+2. Now infer the causal impact of adding food to a territory. Would this
+make foxes heavier? Which covariates do you need to adjust for to estimate
+the total causal influence of food?
+```{r Q2}
+# Standardizeing DV makes life easier!
+
+m2 <- quap(
+  alist(
+    weight ~ dnorm(mu, sigma),
+    mu <-  a + bF*avgfood_std ,
+    a ~ dnorm(4.5, 1),
+    bF ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ), data = df.foxes)
+
+precis(m2)
+
+```
+
+3. Now infer the causal impact of group size. Which covariates do you need
+to adjust for? Looking at the posterior distribution of the resulting model,
+what do you think explains these data? That is, can you explain the estimates
+for all three problems? How do they go together?
+```{r Q3}
+df.foxes <- df.foxes %>% 
+  mutate(weight_std = scale(weight))
+
+m3 <- quap(
+  alist(
+    weight ~ dnorm(mu, sigma),
+    mu <-  a + bG*groupsize_std + bF*avgfood_std, 
+    a ~ dnorm(4.5, 1),
+    bF ~ dnorm(0, 1),
+    bG ~ dnorm(0, 1),
+    sigma ~ dexp(1)
+  ), data = df.foxes)
+
+precis(m3)
+
+
+# From Solution
+d <- foxes
+d$W <- standardize(d$weight)
+d$A <- standardize(d$area)
+d$F <- standardize(d$avgfood)
+d$G <- standardize(d$groupsize)
+m3.1 <- quap(
+  alist(
+    W ~ dnorm( mu , sigma ),
+    mu <- a + bF*F + bG*G,
+    a ~ dnorm(0,0.2),
+    c(bF,bG) ~ dnorm(0,0.5), # set the 2 priors together
+    sigma ~ dexp(1)
+  ), data=d )
+precis(m3.1)
+```
+

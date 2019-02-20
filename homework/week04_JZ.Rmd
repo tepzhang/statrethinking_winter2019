@@ -1,0 +1,131 @@
+---
+title: "week04_JZ"
+author: "Jinxiao Zhang"
+date: "February 17, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rethinking)
+library(tidyverse)
+```
+
+```{r Q1}
+island1 <- c(.2, .2, .2, .2, .2)
+island2 <- c(.8, .1, .05, .025, .025)
+island3 <- c(.05, .15, .7, .05, .05)
+
+# entropy
+-sum(island1*log(island1)) # largest
+-sum(island2*log(island2))
+-sum(island3*log(island3)) # smallest
+
+# Divergence
+
+# island 1 to 2
+sum(island2*(log(island2)-log(island1)))
+# island 1 to 3
+sum(island3*(log(island3)-log(island1)))
+# island 2 to 1
+sum(island1*(log(island1)-log(island2)))
+# island 2 to 3
+sum(island3*(log(island3)-log(island2)))
+# island 3 to 1
+sum(island1*(log(island1)-log(island3))) 
+# island 3 to 2
+sum(island2*(log(island2)-log(island3)))
+
+```
+Island 1 predicts others best because it has the highest entropy (no surprise).
+
+```{r Q2}
+d <- sim_happiness( seed=1977 , N_years=1000 )
+
+d2 <- d[ d$age>17 , ] # only adults
+d2$A <- ( d2$age - 18 ) / ( 65 - 18 )
+
+d2$mid <- d2$married + 1
+m6.9 <- quap(
+  alist(
+    happiness ~ dnorm( mu , sigma ),
+    mu <- a[mid] + bA*A,
+    a[mid] ~ dnorm( 0 , 1 ),
+    bA ~ dnorm( 0 , 2 ),
+    sigma ~ dexp(1)
+  ) , data=d2 )
+precis(m6.9, depth = 2)
+
+m6.10 <- quap(
+  alist(
+    happiness ~ dnorm( mu , sigma ),
+    mu <- a + bA*A,
+    a ~ dnorm( 0 , 1 ),
+    bA ~ dnorm( 0 , 2 ),
+    sigma ~ dexp(1)
+  ) , data=d2 )
+
+# WAIC(m6.9)
+# WAIC(m6.10)
+compare(m6.9, m6.10) %>% plot()
+```
+
+m6.9 has lower WAIC but it is the wrong model! Collider effect.
+
+```{r Q3}
+data("foxes")
+d <- foxes
+d$W <- standardize(d$weight)
+d$A <- standardize(d$area)
+d$F <- standardize(d$avgfood)
+d$G <- standardize(d$groupsize)
+
+m1 <- quap(
+  alist(
+    W ~ dnorm( mu, sigma),
+    mu <- a + bF*F + bG*G + bA*A,
+    a ~ dnorm(0,0.2),
+    c(bF,bG,bA) ~ dnorm(0,0.5), 
+    sigma ~ dexp(1)
+  ), data=d )
+
+m2 <- quap(
+  alist(
+    W ~ dnorm( mu, sigma),
+    mu <- a + bF*F + bG*G,
+    a ~ dnorm(0,0.2),
+    c(bF,bG) ~ dnorm(0,0.5), 
+    sigma ~ dexp(1)
+  ), data=d )
+
+m3 <- quap(
+  alist(
+    W ~ dnorm( mu, sigma),
+    mu <- a + bG*G + bA*A,
+    a ~ dnorm(0,0.2),
+    c(bG,bA) ~ dnorm(0,0.5), 
+    sigma ~ dexp(1)
+  ), data=d )
+
+m4 <- quap(
+  alist(
+    W ~ dnorm( mu, sigma),
+    mu <- a + bF*F,
+    a ~ dnorm(0,0.2),
+    c(bF) ~ dnorm(0,0.5), 
+    sigma ~ dexp(1)
+  ), data=d )
+
+m5 <- quap(
+  alist(
+    W ~ dnorm( mu, sigma),
+    mu <- a + bA*A,
+    a ~ dnorm(0,0.2),
+    c(bA) ~ dnorm(0,0.5), 
+    sigma ~ dexp(1)
+  ), data=d )
+
+
+compare(m1, m2, m3, m4, m5) %>% plot()
+```
+
