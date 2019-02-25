@@ -1,0 +1,148 @@
+---
+title: "week06_JZ"
+author: "Jinxiao Zhang"
+date: "February 24, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rethinking)
+library(tidyverse)
+```
+```{r QI}
+data("NWOGrants")
+d1 <- NWOGrants
+glimpse(d1)
+
+d1$g <- ifelse(d1$gender == "f", 1, 2)
+d1$d <- as.integer(d1$discipline)
+
+m0 <- quap(alist(
+  awards ~ dbinom(applications, p),
+  logit(p) <- a[g],
+  a[g] ~ dnorm(0, 1.5)
+), data = d1)
+precis(m0, depth = 2)
+
+post <- extract.samples(m0)
+diff_a <- post$a[,1] - post$a[,2]
+diff_p <- inv_logit(post$a[,1]) - inv_logit(post$a[,2])
+precis( list( diff_a=diff_a , diff_p=diff_p ) )
+
+
+m1 <- quap(alist(
+  awards ~ dbinom(applications, p),
+  logit(p) <- a[g]+b[d],
+  a[g] ~ dnorm(0, 1.5),
+  b[d] ~ dnorm(0, 1.5)
+), data = d1)
+
+precis(m1, depth = 2)
+
+post <- extract.samples(m1)
+diff_a <- post$a[,1] - post$a[,2]
+diff_p <- inv_logit(post$a[,1]) - inv_logit(post$a[,2])
+precis( list( diff_a=diff_a , diff_p=diff_p ) )
+
+# postcheck(m1)
+
+# the DAG
+# gender -> discipline -> awards ratio
+ggplot(NULL)+
+  annotate("text", x = 1, y = 1, size = 10, label = "gender")+
+  annotate("text", x = 5, y = 1, size = 10, label = "p-award")+
+  annotate("text", x = 3, y = 4, size = 10, label = "discipline")+
+  annotate("segment", x = 2, xend = 4, y = 1, yend = 1, size = 2, arrow=arrow())+
+  annotate("segment", x = 1, xend = 2, y = 1.5, yend = 4, size = 2, arrow=arrow())+
+  annotate("segment", x = 4, xend = 5, y = 4, yend = 1.5, size = 2, arrow=arrow())+
+  xlim(0, 6)+
+  ylim(0, 6)+
+  theme_classic()
+```
+No direct effect of gender.
+
+```{r Q2}
+# the DAG
+ggplot(NULL)+
+  annotate("text", x = 1, y = 1, size = 10, label = "gender")+
+  annotate("text", x = 5, y = 1, size = 10, label = "p-award")+
+  annotate("text", x = 3, y = 4, size = 10, label = "discipline")+
+  annotate("text", x = 6, y = 4, size = 10, label = "career\n stage")+
+  annotate("segment", x = 2, xend = 4, y = 1, yend = 1, size = 2, arrow=arrow())+
+  annotate("segment", x = 1, xend = 2, y = 1.5, yend = 4, size = 2, arrow=arrow())+
+  annotate("segment", x = 4, xend = 5, y = 4, yend = 1.5, size = 2, arrow=arrow())+
+  annotate("segment", x = 5.5, xend = 4.2, y = 4, yend = 4, size = 2, arrow=arrow())+
+  annotate("segment", x = 6, xend = 5.2, y = 3, yend = 1.5, size = 2, arrow=arrow())+
+  xlim(0, 7)+ ylim(0, 6)+
+  theme_classic()
+
+```
+Discipline is now a collider between gender and discipline.
+Yes, pollsible. Direct: female --> p-award; female --> some disciplines --> junior career stage --| p-award
+
+```{r Q3}
+data(Primates301)
+d2 <- Primates301
+d2$log_brain_std <- standardize(log(d2$brain))
+glimpse(d2)
+
+# mean of log-normal = exp(mu + sigma^2/2)
+# plot prior a
+curve( dlnorm( x , 1 , 0.5 ) , from=0 , to=20 , n=200 )
+# plot prior a+b
+N <- 100
+a <- rnorm( N , 1 , 0.5 )
+b <- rnorm( N , 0 , 1 )
+plot( NULL , xlim=c(-2,2) , ylim=c(0,300) )
+for ( i in 1:N ) curve( exp( a[i] + b[i]*x ) , add=TRUE , col=col.alpha("black",0.5) )
+
+# model 2.1
+m2.1 <- quap(
+  alist(
+    social_learning ~ dpois(lambda),
+    log(lambda) <- a + b*log_brain_std,
+    a ~ dnorm(0, .5),
+    b ~ dnorm(0, 1)
+  ), data = d2 %>% select(social_learning, log_brain_std) %>% 
+    na.omit() #, chains = 4, log_lik = TRUE
+)
+precis(m2.1)
+
+postcheck(m2.1,window=50)
+
+# model 2.2
+d2$log_res_std <- standardize(log(d2$research_effort))
+
+m2.2 <- quap(
+  alist(
+    social_learning ~ dpois(lambda),
+    log(lambda) <- a + b*log_brain_std + c*log_res_std,
+    a ~ dnorm(0, .5),
+    b ~ dnorm(0, 1),
+    c ~ dnorm(0, 1)
+  ), data = d2 %>% 
+    select(social_learning, log_brain_std, log_res_std) %>% 
+    na.omit() #, chains = 4, log_lik = TRUE
+)
+precis(m2.2)
+
+compare(m2.1, m2.2)
+
+
+# the DAG
+ggplot(NULL)+
+  annotate("text", x = 1, y = 1, size = 10, label = "B")+
+  annotate("text", x = 5, y = 1, size = 10, label = "SL")+
+  annotate("text", x = 3, y = 4, size = 10, label = "R")+
+  # annotate("text", x = 6, y = 4, size = 10, label = "career\n stage")+
+  annotate("segment", x = 1.5, xend = 4.5, y = 1, yend = 1, size = 2, arrow=arrow())+
+  annotate("segment", x = 1.5, xend = 2.5, y = 1.5, yend = 4, size = 2, arrow=arrow())+
+  annotate("segment", x = 3.5, xend = 4.5, y = 4, yend = 1.5, size = 2, arrow=arrow())+
+  # annotate("segment", x = 5.5, xend = 4.2, y = 4, yend = 4, size = 2, arrow=arrow())+
+  # annotate("segment", x = 6, xend = 5.2, y = 3, yend = 1.5, size = 2, arrow=arrow())+
+  xlim(0, 6)+ ylim(0, 6)+
+  theme_classic()
+```
+Larger brain size --> more research --> more instances of social learning
+
