@@ -1,0 +1,130 @@
+---
+title: "week07_JZ"
+author: "Jinxiao Zhang"
+date: "March 5, 2019"
+output: html_document
+---
+
+```{r load library}
+library(DiagrammeR)
+library(rethinking)
+```
+
+1. In the Trolley data-data(Trolley)-we saw how education level (modeled as
+an ordered category) is associated with responses. Is this association causal? One
+plausible confound is that education is also associated with age, through a causal
+process: People are older when they finish school than when they begin it.
+Reconsider the Trolley data in this light. Draw a DAG that represents hypothetical
+causal relationships among response, education, and age. Which statical model
+or models do you need to evaluate the causal influence of education on responses?
+Fit these models to the trolley data. What do you conclude about the causal relationships
+among these three variables?
+
+> Not causal association. 
+
+```{r Q1a}
+# draw the DAG
+DiagrammeR("graph LR;
+           Age-->Edu;
+           Age-->Resp;
+           Edu-->Resp")
+
+```
+> Education is not a significant predictor anymore, after considering age. Education effect changes from negative to non-significantly positive.
+
+```{r Q1b}
+data(Trolley)
+d <- Trolley
+
+levels(d$edu)
+edu_levels <- c( 6 , 1 , 8 , 4 , 7 , 2 , 5 , 3 )
+d$edu_new <- edu_levels[ d$edu ]
+
+d1 <- list(
+             R = d$response ,
+             A = d$age, # standardize age may help make it faster!!!
+             E = as.integer( d$edu_new ), # edu_new as an index
+             alpha = rep(2,7) ) # delta prior
+m1 <- ulam(
+  alist(
+    R ~ ordered_logistic( phi , kappa ),
+    phi <- bE*sum( delta_j[1:E] ) + bA*A,
+    kappa ~ normal( 0 , 1.5 ),
+    c(bA,bE) ~ normal( 0 , 1 ),
+    vector[8]: delta_j <<- append_row( 0 , delta ),
+    simplex[7]: delta ~ dirichlet( alpha )
+  ),
+  data=d1 , chains=3 , cores=2 )
+
+precis(m1, depth = 2, omit = "kappa") # %>% plot()
+
+
+
+# Chapter 12
+dat <- list(
+             R = d$response ,
+             action = d$action,
+             intention = d$intention,
+             contact = d$contact,
+             E = as.integer( d$edu_new ), # edu_new as an index
+             alpha = rep(2,7) ) # delta prior
+
+m12.5 <- ulam(
+  alist(
+    R ~ ordered_logistic( phi , kappa ),
+    phi <- bE*sum( delta_j[1:E] ) + bA*action + bI*intention + bC*contact,
+    kappa ~ normal( 0 , 1.5 ),
+    c(bA,bI,bC,bE) ~ normal( 0 , 1 ),
+    vector[8]: delta_j <<- append_row( 0 , delta ),
+    simplex[7]: delta ~ dirichlet( alpha )
+  ),
+  data=dat , chains=3 , cores=3 )
+
+
+precis( m12.5 , depth=2 , omit="kappa" )
+
+```
+
+2. Consider one more variable in the Trolley data: Gender. Suppose that gender
+might influence education as well as response directly. Draw the DAG now that
+includes response, education, age, and gender.
+Using only the DAG, is it possible that the inferences from Problem 1 are confounded
+by gender? If so, define any additional models you need to infer the causal
+influence of education on response. What do you conclude?
+> Yes, a fork by gender.
+
+```{r Q2}
+DiagrammeR("graph LR;
+           Age-->Edu;
+           Age-->Resp;
+           Edu-->Resp;
+           Gen-->Edu;
+           Gen-->Resp")
+
+d2 <- list(
+             R = d$response ,
+             A = standardize(d$age),
+             E = as.integer( d$edu_new ), # edu_new as an index
+             G = d$male + 0L,
+             alpha = rep(2,7)) # delta prior
+
+m2 <- ulam(
+  alist(
+    R ~ ordered_logistic( phi , kappa ),
+    phi <- bE*sum( delta_j[1:E] ) + bA*A + bG*G,
+    kappa ~ normal( 0 , 1.5 ),
+    c(bA,bE,bG) ~ normal( 0 , 1 ),
+    vector[8]: delta_j <<- append_row( 0 , delta ),
+    simplex[7]: delta ~ dirichlet( alpha )
+  ),
+  data=d2 , chains=3, cores=2 )
+
+# show(m2)
+precis(m2, depth = 2, omit = "kappa") # %>% plot()
+```
+> Gender has an effect. The effect of education changes from positive to slightly negative.
+
+```{r save workspace}
+save.image("week07_JZ.Rdata")
+```
+
